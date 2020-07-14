@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//#include "mbed.h"
+#include "mbed.h"
 //#include "platform/mbed_thread.h"
 #include "stm32f429i_discovery_lcd.h"
+//#include "LCD_DISCO_F429ZI.h"
 #include "stm32f429i_discovery_ts.h"
-#include "stm32f429i_discovery.h"
+//#include "stm32f429i_discovery.h"
+//#include "stm32f429i_discovery_io.h"
 
 // Blinking rate in milliseconds
 #define BLINKING_RATE_MS 200
@@ -43,19 +45,28 @@ bool updateDisplay = true;
 int backgroundColor = LCD_COLOR_WHITE;
 
 // Pin Names
-#define TEMP_PIN PC_4;
-#define HEATER_PIN PG_13;
-#define HEATER2_PIN PG_14;
+#define TEMP_PIN PC_4
+#define HEATER_PIN PG_13
+#define HEATER2_PIN PG_14
 
-
-    
 // Initialise the digital pin LED1 as an output
-DigitalOut heater1(HEATER_PIN);
 DigitalOut heater2(HEATER2_PIN);
+DigitalOut heater1(HEATER2_PIN);
 AnalogIn temp(TEMP_PIN);
-    
-Serial pc(USBTX, USBRX);
-LCD_DISCO_F429ZI lcd;
+
+/*  BSP_LCD_Init();  
+  BSP_LCD_LayerDefaultInit(1, LCD_FRAME_BUFFER_LAYER1);
+  BSP_LCD_SelectLayer(1);
+  BSP_LCD_Clear(LCD_COLOR_WHITE);  
+  BSP_LCD_SetColorKeying(1, LCD_COLOR_WHITE);
+  BSP_LCD_SetLayerVisible(1, DISABLE);
+  BSP_LCD_LayerDefaultInit(0, LCD_FRAME_BUFFER_LAYER0);
+  BSP_LCD_SelectLayer(0);
+  BSP_LCD_SetFont(&Font16);
+  BSP_LCD_DisplayOn();
+  BSP_LCD_Clear(LCD_COLOR_WHITE);   */
+
+//Serial pc(USBTX, USBRX);
     
 // Touch Screen SetUp
 TS_StateTypeDef touchState;
@@ -63,13 +74,13 @@ TS_StateTypeDef touchState;
 class Button{
     public:
         Button(int16_t x, int16_t y, int16_t newWidth, int16_t newHeight, 
-        uint32_t newColor, unsigned char* buttonMessage, LCD_DISCO_F429ZI display){
+        uint32_t newColor, unsigned char* buttonMessage){
             X = x;
             Y = y;
             width = newWidth;
             height = newHeight;
             color = newColor;
-            screen = display;
+            //screen = display;
             message = buttonMessage;
         }
 
@@ -78,7 +89,7 @@ class Button{
         int16_t width;
         int16_t height;
         uint32_t color;
-        LCD_DISCO_F429ZI screen;
+        //LCD_DISCO_F429ZI screen;
         unsigned char* message;
         
     
@@ -94,28 +105,28 @@ class Button{
         }
 
         void showButton() {
-            uint16_t prevousColor = lcd.GetTextColor();
-            screen.SetBackColor(color);
-            screen.SetTextColor(LCD_COLOR_BLACK);
-            screen.FillRect(X,Y,width,height);
-            screen.SetTextColor(color);
+            uint16_t prevousColor = BSP_LCD_GetTextColor();
+            BSP_LCD_SetBackColor(color);
+            BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+            BSP_LCD_FillRect(X,Y,width,height);
+            BSP_LCD_SetTextColor(color);
             thread_sleep_for(500);
-            screen.FillRect(X+3, Y+3, width-6, height-6);
-            screen.SetTextColor(LCD_COLOR_BLACK);
+            BSP_LCD_FillRect(X+3, Y+3, width-6, height-6);
+            BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
             /*
             uint8_t *messagePointer = message;
             uint16_t messageLength = 0;
             while (*message++) messageLength++;
             
-            if (screen.GetFont()->Width * messageLength > width){
-                width = messageLength * screen.GetFont()->Width + 8;
+            if (BSP_LCD_GetFont()->Width * messageLength > width){
+                width = messageLength * BSP_LCD_GetFont()->Width + 8;
                 showButton();
                 return;
             }
             */
-            screen.DisplayStringAt(X + width / 2, (Y + height/2), message,CENTER_MODE);
-            screen.SetTextColor(prevousColor);
-            screen.SetBackColor(backgroundColor);
+            BSP_LCD_DisplayStringAt(X + width / 2, (Y + height/2), message,CENTER_MODE);
+            BSP_LCD_SetTextColor(prevousColor);
+            BSP_LCD_SetBackColor(backgroundColor);
         }
 };
 
@@ -171,8 +182,8 @@ class shiftArray{
 void changeState(MACHINE_STATE newState) {
     updateDisplay = true;
     state = newState;
-    lcd.Clear(backgroundColor);
-    wait_ms(50);
+
+    ThisThread::sleep_for(5ms);
 }
 
 
@@ -180,24 +191,25 @@ void changeState(MACHINE_STATE newState) {
 
 int main()
 {
+    BSP_LCD_Init();
     shiftArray<float> tempHistory = shiftArray<float>(100);
     float tempArray[] = { 1.0, 0.5, 0.0, 0.75, 0.6};
     unsigned char faultReason1[100] = "No Reason Found";
     unsigned char *faultReason = faultReason1;
     
-    Button *onButton       = new Button(50, 100, 100, 50, LCD_COLOR_GREEN,     onButtonLabel, lcd);
-    Button *offButton      = new Button(50,  70, 100, 50, LCD_COLOR_RED,       offButtonLabel, lcd);
-    Button *steamButton    = new Button(50, 140, 150, 50, LCD_COLOR_LIGHTBLUE, steamButtonLabel, lcd);
-    Button *hotWaterButton = new Button(50, 140, 150, 50, LCD_COLOR_LIGHTBLUE,      hotWaterButtonLabel, lcd);
+    Button *onButton       = new Button(50, 100, 100, 50, LCD_COLOR_GREEN,     onButtonLabel);
+    Button *offButton      = new Button(50,  70, 100, 50, LCD_COLOR_RED,       offButtonLabel);
+    Button *steamButton    = new Button(50, 140, 150, 50, LCD_COLOR_LIGHTBLUE, steamButtonLabel);
+    Button *hotWaterButton = new Button(50, 140, 150, 50, LCD_COLOR_LIGHTBLUE,      hotWaterButtonLabel);
 
     changeState(STARTUP);
 
     while (true) {
         switch(state){
             case STARTUP: {
-                lcd.Clear(LCD_COLOR_WHITE);
-                lcd.DisplayStringAtLine(2, startUpTitle);
-                BSP_TS_Init(lcd.GetXSize(), lcd.GetYSize());
+                BSP_LCD_Clear(LCD_COLOR_WHITE);
+                BSP_LCD_DisplayStringAtLine(2, startUpTitle);
+                BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
                 thread_sleep_for(500);
                 changeState(LOW_POWER);
                 break;
@@ -213,9 +225,9 @@ int main()
                     }
                 }
                 if (updateDisplay){
-                    lcd.Clear(LCD_COLOR_WHITE);
+                    BSP_LCD_Clear(LCD_COLOR_WHITE);
                     onButton->showButton();
-                    lcd.DisplayStringAtLine(2, lowPowerTitle);
+                    BSP_LCD_DisplayStringAtLine(2, lowPowerTitle);
                     updateDisplay = false;
                 }
                 thread_sleep_for(1000);
@@ -226,17 +238,17 @@ int main()
                 
                 int16_t radius = 10 * temp;
                 if (radius > 0) {
-                        lcd.SetTextColor(LCD_COLOR_WHITE);
-                        lcd.FillCircle(100, 200, (int16_t) 10);
-                        lcd.SetTextColor(LCD_COLOR_BLACK);
-                        lcd.FillCircle(100, 200, (int16_t) radius);
+                        BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+                        BSP_LCD_FillCircle(100, 200, (int16_t) 10);
+                        BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+                        BSP_LCD_FillCircle(100, 200, (int16_t) radius);
                 }
                 if (updateDisplay) {
-                    lcd.Clear(LCD_COLOR_WHITE);
+                    BSP_LCD_Clear(LCD_COLOR_WHITE);
                     offButton->showButton();
                     steamButton->showButton();
-                    lcd.ClearStringLine(2);
-                    lcd.DisplayStringAtLine(2, hotWaterTitle);
+                    BSP_LCD_ClearStringLine(2);
+                    BSP_LCD_DisplayStringAtLine(2, hotWaterTitle);
                     updateDisplay = false;
                 }
                 if(touchState.TouchDetected) {
@@ -269,10 +281,10 @@ int main()
             }
             case STEAM: {
                 if (updateDisplay) {
-                    lcd.DisplayStringAtLine(2, steamingTitle);
+                    BSP_LCD_DisplayStringAtLine(2, steamingTitle);
                     offButton->showButton();
                     hotWaterButton->showButton();
-                    lcd.DisplayStringAtLine(2, steamingTitle);
+                    BSP_LCD_DisplayStringAtLine(2, steamingTitle);
                     updateDisplay = false;
                 }
                 BSP_TS_GetState(&touchState);
@@ -288,10 +300,10 @@ int main()
                 }
                 int16_t radius = 100 * temp;
                 if (radius > 0) {
-                    lcd.SetTextColor(LCD_COLOR_GRAY);
-                    lcd.FillRect(200, 200, 25, (int16_t) 100);
-                    lcd.SetTextColor(LCD_COLOR_BLACK);
-                    lcd.FillRect(200, 200, 25, (int16_t) radius);
+                    BSP_LCD_SetTextColor(LCD_COLOR_GRAY);
+                    BSP_LCD_FillRect(200, 200, 25, (int16_t) 100);
+                    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+                    BSP_LCD_FillRect(200, 200, 25, (int16_t) radius);
                 }
                 if (temp < 0.7) {
                     heater1 = true;
@@ -311,8 +323,8 @@ int main()
             }
             case FAULT: {
                 if (updateDisplay) {
-                    lcd.DisplayStringAtLine(2, faultTitle);
-                    lcd.DisplayStringAtLine(3, faultReason);
+                    BSP_LCD_DisplayStringAtLine(2, faultTitle);
+                    BSP_LCD_DisplayStringAtLine(3, faultReason);
                     updateDisplay = false;
                 }
                 exit(0);
@@ -322,20 +334,20 @@ int main()
                 faultReason = invaildState;
             }
         }
-        pc.printf("Temp:%0.2f Touch:%1d X:%3d Y:%3d \n", 
-        temp.read(), touchState.TouchDetected, touchState.X, touchState.Y);
+        //pc.printf("Temp:%0.2f Touch:%1d X:%3d Y:%3d \n", 
+        //temp.read(), touchState.TouchDetected, touchState.X, touchState.Y);
         tempHistory.add(temp.read());
         // Draw Graph;
-        lcd.SetTextColor(LCD_COLOR_GREEN);
-        lcd.FillRect(0, lcd.GetYSize()-50, 200, 50);
-        lcd.SetTextColor(LCD_COLOR_BLACK);
+        BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+        BSP_LCD_FillRect(0, BSP_LCD_GetYSize()-50, 200, 50);
+        BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
         for (int i = 0; i < tempHistory.getSize(); i++) {   
             int x = i * 2;
             int width = 2;
             int height = tempHistory.get(i) *  50;
-            int y = lcd.GetYSize() - height;
+            int y = BSP_LCD_GetYSize() - height;
             //pc.printf("temp: %0.3f, x:%3d, y:%3d, width:%3d, height: %3d\n",tempHistory.get(i),x,y,width,height);
-            lcd.DrawRect(x, y, width, height);
+            BSP_LCD_DrawRect(x, y, width, height);
         }
         
         thread_sleep_for(BLINKING_RATE_MS);
